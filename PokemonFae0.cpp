@@ -4,6 +4,11 @@
 #include "Mapa2.h"
 #include "Mapa3.h"
 #include "Pokemon.h"
+#include "vector"
+#include <cstdlib>
+#include <ctime>
+#include <random>
+#include "BatallaPokemon.h"
 
 //mal tp de regreso, lo coloca hasta abajo cuando debe ser arriba en el mapa_0
 
@@ -15,10 +20,8 @@ float velocidad = 1 * escala;
 bool viene_de_arriba = false; //Correcta aparicion del personaje
 
 
-// Implementación del método createScene
-cocos2d::Scene* PokemonFase0::createScene() {
-    return PokemonFase0::create(); // Llama a la macro CREATE_FUNC
-    
+cocos2d::Scene* PokemonFase0::createScene(Pokemon* pokemon) {
+    return PokemonFase0::create(pokemon); // Llama a la macro CREATE_FUNC
 }
 
 
@@ -53,24 +56,37 @@ void PokemonFase0::setupCamera() {
    
 }
 
-// Implementación del método init
-bool PokemonFase0::init() {
+bool PokemonFase0::init(Pokemon* pokemon) {
+    srand(static_cast<unsigned int>(time(NULL)));
     if (!Scene::init()) {
         return false;
     }
 
+    pokemonInicial = pokemon;
+    
+    agregarPokemon(pokemonInicial);
+
+    //no se escucha esta cancion
+    
+
+    // Reproducir el audio de forma asincrona
+    AudioManager::getInstance()->playBackgroundMusic("Fondo_0.mp3", true);
+
+    
+    
+    
     
     
 
     // Inicializamos el mapa, en este caso, Mapa1
-    mapaActual = new Mapa1();  // Aquí puedes usar Mapa1, Mapa2, etc.
+    mapaActual = new Mapa1();  //  usar Mapa1, Mapa2...
     mapaActual->cargarFondo();  // Cargar el fondo del mapa
     this->addChild(mapaActual);  // Agregar el mapa a la escena
 
 
 
     tiles = 32;
-    //inicializarPokemones();
+    inicializarPokemones();
     //agregarFondo();
 
     SpriteFrameCache::getInstance()->addSpriteFramesWithFile("entrenador.plist");
@@ -123,15 +139,44 @@ void PokemonFase0::onKeyReleased(EventKeyboard::KeyCode keyCode, Event* event) {
 bool animacionActiva = false;
 bool isPressed = false;
 
+void PokemonFase0::agregarPokemon(Pokemon* pokemon) {
+    if (pokemon != nullptr) {
+        galeriaPokemones.pushBack(pokemon);
+    }
+}
+void PokemonFase0::agregarPokemonSalvaje(Pokemon* pokemonSalvaje) {
+    if (pokemonSalvaje != nullptr) {
+        PokemonesSalvajesAleatorios.pushBack(pokemonSalvaje);
+    }
+}
+
+
+void PokemonFase0::detenerPersonajeManual() {
+    keysPressed.clear();
+    Vec2 position = personaje->getPosition();
+    personaje->stopAllActions();
+    personaje->setSpriteFrame("entrenador_pokeball-1.png");
+
+    isPressed = false;
+    animacionActiva = false;
+    personaje->setPosition(position);
+    personaje->setVisible(true);
+}
 
 
 
-
-// Método update que se llama en cada frame
+// Metodo update que se llama en cada frame
 void PokemonFase0::update(float dt) {
+
+    bool seEstaMoviendo = false;
+
     Vec2 position = personaje->getPosition(); 
+    if (keysPressed.count(EventKeyboard::KeyCode::KEY_P)) {
+        mostrarPokemones();
+    }
     
     if (keysPressed.empty()) {//Ver si se deja de presionar
+
         personaje->stopAllActions(); //Reseteamos acciones
         if (!animacionActiva) {
            personaje->setSpriteFrame("entrenador_camina_abajo-1.png");
@@ -149,8 +194,9 @@ void PokemonFase0::update(float dt) {
     //CCLOG("Posición del personaje: (%f, %f)", position.x, position.y);
     
 
-    // Actualiza la posición del personaje según las teclas presionadas
+    // Actualiza la posicion del personaje segun las teclas presionadas
     if (keysPressed.count(EventKeyboard::KeyCode::KEY_A)) {
+        
         int xNuevoMapa = static_cast<int>(((position.x - velocidad * escala) / escala) / tiles);
         
         if (puedeMoverse(xNuevoMapa,19 - yMapa)) {
@@ -210,22 +256,28 @@ void PokemonFase0::update(float dt) {
     float nuevaPosX = clampf(position.x, tiles / 2, (12 * tiles * escala) - tiles / 2);
     float nuevaPosY = clampf(position.y, tiles / 2, (20 * tiles * escala) - tiles / 2);
 
+    personaje->setPosition(nuevaPosX, nuevaPosY); // Actualiza la posición del personaje
 
+    //Me esta regresando 16----------------------------------------------------------------------
     int valorCelda = mapaActual->obtenerValorEnPosicion(xMapa, 19 - yMapa);
+    CCLOG("%d",valorCelda);
     if (valorCelda == 17) {
-        cambiarMapa("mapa_dos");  // Cambiar al mapa superior
+        cambiarMapa("mapa_tres");  // Cambiar al mapa superior
         return;
     }
     else if (valorCelda == 16) {
-        cambiarMapa("mapa_uno");  // Cambiar al mapa inferior
+        cambiarMapa("mapa_dos");  // Cambiar al mapa inferior
         return;
     }
     else if (valorCelda == 15) {
-        cambiarMapa("mapa_cero");
+        cambiarMapa("mapa_uno");
+    }
+    else if (valorCelda == 14) {
+        cambiarMapa("mapa_uno_aux");
     }
 
 
-    personaje->setPosition(nuevaPosX, nuevaPosY); // Actualiza la posición del personaje
+    
 
     Size visibleSize = Director::getInstance()->getVisibleSize();
     Vec2 cameraPosition = personaje->getPosition() - Vec2(visibleSize.width / 2, visibleSize.height / 2);
@@ -242,16 +294,16 @@ void PokemonFase0::crearAnimacionCaminarDerecha() {
     frames.pushBack(SpriteFrameCache::getInstance()->getSpriteFrameByName("entrenador_camina_derecha-0.png"));
     frames.pushBack(SpriteFrameCache::getInstance()->getSpriteFrameByName("entrenador_camina_derecha-1.png"));
     frames.pushBack(SpriteFrameCache::getInstance()->getSpriteFrameByName("entrenador_camina_derecha-2.png"));
-    // Agrega más frames según tu animación
+    // Agrega más frames segun tu animación
 
     if (frames.size() > 0) {
         Animation* animation = Animation::createWithSpriteFrames(frames, 0.1f); // 0.1f es el tiempo entre frames
         Animate* animate = Animate::create(animation);
-        personaje->runAction(RepeatForever::create(animate)); // Repite la animación
+        personaje->runAction(RepeatForever::create(animate)); // Repite la animacoón
     }
     else {
         animacionActiva = false;
-        CCLOG("No se encontraron frames para la animación.");
+        CCLOG("No se encontraron frames para la animacion");
     }
 }
 
@@ -266,11 +318,11 @@ void PokemonFase0::crearAnimacionCaminarIzquierda() {
     if (frames.size() > 0) {
         Animation* animation = Animation::createWithSpriteFrames(frames, 0.1f); // 0.1f es el tiempo entre frames
         Animate* animate = Animate::create(animation);
-        personaje->runAction(RepeatForever::create(animate)); // Repite la animación
+        personaje->runAction(RepeatForever::create(animate)); // Repite la animacion
     }
     else {
         animacionActiva = false;
-        CCLOG("No se encontraron frames para la animación.");
+        CCLOG("No se encontraron frames para la animacion");
     }
 }
 
@@ -279,16 +331,16 @@ void PokemonFase0::crearAnimacionCaminarArriba() {
     frames.pushBack(SpriteFrameCache::getInstance()->getSpriteFrameByName("entrenador_camina_arriba-0.png"));
     frames.pushBack(SpriteFrameCache::getInstance()->getSpriteFrameByName("entrenador_camina_arriba-1.png"));
     frames.pushBack(SpriteFrameCache::getInstance()->getSpriteFrameByName("entrenador_camina_arriba-2.png"));
-    // Agrega más frames según tu animación
+    // Agrega aás frames según tu animacion
 
     if (frames.size() > 0) {
         Animation* animation = Animation::createWithSpriteFrames(frames, 0.1f); // 0.1f es el tiempo entre frames
         Animate* animate = Animate::create(animation);
-        personaje->runAction(RepeatForever::create(animate)); // Repite la animación
+        personaje->runAction(RepeatForever::create(animate)); // Repite la animacion
     }
     else {
         animacionActiva = false;
-        CCLOG("No se encontraron frames para la animación.");
+        CCLOG("No se encontraron frames para la animacion");
     }
 }
 
@@ -306,11 +358,101 @@ void PokemonFase0::crearAnimacionCaminarAbajo() {
     }
     else {
         animacionActiva = false;
-        CCLOG("No se encontraron frames para la animación.");
+        CCLOG("No se encontraron frames para la animacion.");
     }
 }
 
-// Implementación de otros métodos
+
+Pokemon* PokemonFase0::getPokemonSalvajeEnPosicion(int index) {
+    if (index >= 0 && index < PokemonesSalvajesAleatorios.size()) {
+        return PokemonesSalvajesAleatorios.at(index);
+    }
+    return nullptr;
+}
+
+Pokemon* PokemonFase0::getPokemonEnPosicion(int index) {
+    if (index >= 0 && index < galeriaPokemones.size()) {
+        return galeriaPokemones.at(index);
+    }
+    return nullptr;
+}
+
+Pokemon* PokemonFase0::getPokemonPorNombre(const std::string& nombre) {
+    for (Pokemon* pokemon : galeriaPokemones) {
+        if (pokemon->getNombre() == nombre) {
+            return pokemon;
+        }
+    }
+    return nullptr;
+}
+
+void PokemonFase0::mostrarPokemones() {
+    CCLOG("=== Pokemones en la Galeria ===");
+    for (int i = 0; i < galeriaPokemones.size(); i++) {
+        Pokemon* pokemon = galeriaPokemones.at(i);
+        CCLOG("Pokemon #%d: %s (Nivel %d)",
+            i + 1,
+            pokemon->getNombre().c_str(),
+            pokemon->getNivel());
+    }
+}
+
+
+
+void PokemonFase0::liberarPokemon(int index) {
+    if (index >= 0 && index < galeriaPokemones.size()) {
+        galeriaPokemones.erase(index);
+    }
+}
+
+void PokemonFase0::liberarPokemonPorNombre(const std::string& nombre) {
+    for (int i = 0; i < galeriaPokemones.size(); i++) {
+        if (galeriaPokemones.at(i)->getNombre() == nombre) {
+            galeriaPokemones.erase(i);
+            break;
+        }
+    }
+}
+
+
+void PokemonFase0::iniciarBatalla(Pokemon* pokemonSalvaje) {
+
+    //AudioManager::getInstance()->playBackgroundMusic("Batalla.mp3", false);
+
+    detenerPersonajeManual();
+
+    if (galeriaPokemones.size() > 0) {
+        Pokemon* miPokemon = galeriaPokemones.at(0);
+        CCLOG("¡Batalla entre %s (Nivel %d) y %s (Nivel %d)",
+            miPokemon->getNombre().c_str(),
+            miPokemon->getNivel(),
+            pokemonSalvaje->getNombre().c_str(),
+            pokemonSalvaje->getNivel());
+
+        auto escenaBatalla = BatallaPokemon::create(miPokemon, pokemonSalvaje, getGaleriaPokemones());
+        AudioManager::getInstance()->changeSceneMusic("Batalla.mp3", true);
+        
+        escenaBatalla->setPokemonCapturado([this](Pokemon* pokemon) {
+            capturarPokemon(pokemon);
+            });
+        Director::getInstance()->pushScene(TransitionFade::create(0.5f, escenaBatalla));
+    }
+
+    
+    
+}
+
+void PokemonFase0::capturarPokemon(Pokemon* pokemonSalvaje) {
+    if (pokemonSalvaje) {
+        galeriaPokemones.pushBack(pokemonSalvaje);
+        CCLOG("¡%s ha sido capturado!", pokemonSalvaje->getNombre().c_str());
+        mostrarPokemones();
+    }
+}
+
+
+
+
 void PokemonFase0::agregarFondo() {
     fondo = Sprite::create("fondo_arboles_fondo_0.png");
 
@@ -325,8 +467,6 @@ void PokemonFase0::agregarFondo() {
     
     float centroX = (12 * tiles * escala) / 2;
     float centroY = (20 * tiles * escala) / 2;
-
-    
     fondo->setPosition(centroX, centroY);
     
 
@@ -337,26 +477,37 @@ void PokemonFase0::agregarFondo() {
 
 void PokemonFase0::cambiarMapa(const std::string& direccion) {
     CCLOG("Cambiando de mapa hacia %s...", direccion.c_str());
+    if(viene_de_arriba)
+    CCLOG("Viene de: arribe ");
+    else {
+        CCLOG("Viene de: abajo ");
+    }
+
 
     // Elimina el mapa actual
-    if (mapaActual != nullptr) {
+   if (mapaActual != nullptr) {
         this->removeChild(mapaActual);
         mapaActual->release();
     }
 
     float previosY = personaje->getPositionY();
 
-    // Cargar un nuevo mapa basado en la dirección
-    if (direccion == "mapa_uno") {
+    // Cargar un nuevo mapa basado en la direccion
+    if (direccion == "mapa_dos") {
         mapaActual = new Mapa2(); // Carga el mapa superior
         viene_de_arriba = true;
     }
-    else if (direccion == "mapa_dos") {
+    else if (direccion == "mapa_tres") {
         mapaActual = new Mapa3(); // Carga el mapa inferior
+        viene_de_arriba = false;
     }
-    else if (direccion == "mapa_cero") {
+    else if (direccion == "mapa_uno") {
         mapaActual = new Mapa1();
-        //viene_de_arriba = false;
+        viene_de_arriba = false;
+    }
+    else if (direccion == "mapa_uno_aux") {
+        mapaActual = new Mapa1();
+        //viene_de_arriba = true;
     }
 
     // Asegurarse de cargar el nuevo mapa
@@ -367,57 +518,78 @@ void PokemonFase0::cambiarMapa(const std::string& direccion) {
     }
 
     // Ajustar la posición inicial del personaje según la dirección
-    if (direccion == "mapa_uno") {
-        CCLOG("Entrando a Mapa 1 desde Mapa 0...");
+    if (direccion == "mapa_dos") {
+        CCLOG("Entrando a Mapa 2 desde Mapa 1...");
         personaje->setPosition(Vec2(tiles * escala * 6, tiles * escala * 2)); // Aparece en la entrada del nuevo mapa
     }
-    else if (direccion == "mapa_dos") {
-        CCLOG("Entrando a Mapa 2 desde Mapa 0...");
+    else if (direccion == "mapa_tres") {
+        CCLOG("Entrando a Mapa 3 desde Mapa 1...");
         personaje->setPosition(Vec2(tiles * escala * 6, tiles * escala * 18)); // Aparece en la entrada del nuevo mapa
     }
-    else if (direccion == "mapa_cero") {
-        if (viene_de_arriba) {
-            CCLOG("Personaje colocado en (6, 1) en Mapa 0 (desde abajo).");
-            personaje->setPosition(Vec2(tiles*escala * 6, tiles*escala * 3));
-            
-
-        }
-        else {
-            
-            personaje->setPosition(Vec2((tiles)*escala * 6, (tiles)*escala * 18)); // Aparece en la entrada del nuevo mapa
-            CCLOG("Personaje colocado en (6, 18) en Mapa 0 (desde arriba).");
-        }
-       
+    else if (direccion == "mapa_uno") {
+        personaje->setPosition(Vec2(tiles * escala * 6, tiles * escala * 1));
         
+        CCLOG("Personaje colocado en (6, 18) en Mapa 0 (desde arriba).");
+            
+    }
+    else if (direccion == "mapa_uno_aux") {
+        CCLOG("Personaje colocado en (6, 1) en Mapa 1 (desde abajo).");
+        personaje->setPosition(Vec2((tiles)*escala * 6, (tiles)*escala * 18)); // Aparece en la entrada del nuevo mapa
+        
+ 
     }
 
-    // Reconfigurar la cámara
+
+    // Reconfigurar la camara
     setupCamera();
 }
 
 
 
 bool PokemonFase0::puedeMoverse(int x, int y) {
- 
+    
+
     if (x < 0 || x >= 11 || y < 0 || y >= 20) {
         return false;  // Si las coordenadas están fuera del mapa, no se puede mover
     }
 
     int valorCelda = mapaActual->obtenerValorEnPosicion(x, y);
     CCLOG("Revisando celda (%d, %d) - Valor: %d", x, y, valorCelda);
+
+
+    if (valorCelda == 2) {
+        int aleatorio = rand() % 100;
+        if (aleatorio == 6) {
+            CCLOG("BATALLA POKEMON ALEATORIA");
+
+            int tamanio = getCantidadPokemonesSalvajes();
+
+            std::mt19937 rng(std::random_device{}());  //random robado de github
+            std::uniform_int_distribution<int> dist(0, tamanio - 1);
+
+            auto pokemonSalvaje = getPokemonSalvajeEnPosicion(dist(rng));
+            CCLOG("CONTRA EL POKEMON SALVAJE: %s", pokemonSalvaje->getNombre().c_str());
+            iniciarBatalla(pokemonSalvaje);
+            //audioManager->playBackgroundMusic("Fondo_0.mp3", false);
+        }
+    }
+
     return valorCelda != 1;  // Si la celda es 1 (arboles), no se puede mover
 }
 
 void PokemonFase0::inicializarElementos() {
-    // Lógica para inicializar elementos de la escena
+    // Logica para inicializar elementos de la escena
 }
 
 void PokemonFase0::inicializarPokemones() {
-    //Pokemon* balbasaur = new Pokemon("Balbasaur", 5, 35, 555, 40, 90, "bulbasaur.png");
 
-    //balbasaur->getSprite()->setPosition(Vec2(100, 200));
+    PokemonesSalvajesAleatorios.pushBack(new Pokemon("Pidgey",6,30,13,14,14,"pidgey.png","Su docilidad es tal que suelen defenderse levantando arena en lugar de contraatacar."));
 
-   // this->addChild(balbasaur->getSprite());
+    PokemonesSalvajesAleatorios.pushBack(new Pokemon("Caterpie", 4, 24, 10, 17, 10, "caterpie.png", "Para protegerse, despide un hedor horrible por las antenas con el que repele a sus enemigos."));
+
+    PokemonesSalvajesAleatorios.pushBack(new Pokemon("Oddish", 5, 25, 7, 12, 11, "oddish.png", "Vaga durante la noche, despertado por la luz de la luna. De dia permanece inmovil bajo la tierra."));
+    
+
 }
 
 void PokemonFase0::escalarTodo() {
