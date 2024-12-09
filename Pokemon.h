@@ -5,10 +5,12 @@
 #include <string>
 #include <vector>
 
-class Pokemon {
+class Pokemon : public cocos2d::Ref{
 public:
     // Constructor
-    Pokemon(std::string& nombre, int nivel, int vidaMaxima, int ataque, int defensa, int velocidad, const std::string& spriteFile, const std::string& descripcion);
+    Pokemon();
+    Pokemon(const std::string& nombre, int nivel, int vidaMaxima, int ataque, int defensa, int velocidad, const std::string& spriteFile, const std::string& descripcion);
+    
 
     ~Pokemon();
 
@@ -40,6 +42,8 @@ public:
 
     std::string getDescripcion() const { return descripcion; }
 
+    std::string getSpriteNombre() const { return nombreSprite; }
+
     cocos2d::Sprite* getSprite() const { return sprite; };
 
     // ATAQUES
@@ -63,6 +67,7 @@ private:
     int ataque;
     int defensa;
     int velocidad;
+    std::string nombreSprite;
     
     std::string descripcion;
     cocos2d::Sprite* sprite; // Sprite del Pokémon
